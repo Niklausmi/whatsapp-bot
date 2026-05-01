@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WA Blaster — WhatsApp Bulk Sender</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #0a0e0d;
+  --surface: #111714;
+  --card: #161d1a;
+  --border: #1f2b26;
+  --border2: #253029;
+  --wa: #25d366;
+  --wa-dim: #1aad52;
+  --wa-glow: rgba(37,211,102,0.15);
+  --wa-glow2: rgba(37,211,102,0.08);
+  --text: #e8f0eb;
+  --text2: #7a9985;
+  --text3: #4a6655;
+  --red: #ff4757;
+  --yellow: #ffc312;
+  --blue: #3d9be9;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grid BG */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(37,211,102,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37,211,102,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Glow orb */
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px; left: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(37,211,102,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: 64px 1fr;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Header ── */
+header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,14,13,0.9);
+  backdrop-filter: blur(12px);
+  gap: 16px;
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--wa);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 16px;
+}
+.logo span { color: var(--wa); }
+
+header .spacer { flex: 1; }
+
+.status-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  font-family: var(--mono);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: all 0.3s;
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text3);
+}
+.status-badge.ready { border-color: var(--wa); background: var(--wa-glow2); color: var(--wa); }
+.status-badge.ready .status-dot { background: var(--wa); box-shadow: 0 0 6px var(--wa); animation: pulse 2s infinite; }
+.status-badge.qr { border-color: var(--yellow); background: rgba(255,195,18,0.08); color: var(--yellow); }
+.status-badge.qr .status-dot { background: var(--yellow); }
+.status-badge.connecting { border-color: var(--blue); background: rgba(61,155,233,0.08); color: var(--blue); }
+.status-badge.connecting .status-dot { background: var(--blue); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ── Sidebar ── */
+aside {
+  border-right: 1px solid var(--border);
+  padding: 24px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(17,23,20,0.6);
+}
+
+.nav-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: var(--text3); text-transform: uppercase;
+  padding: 8px 12px 4px;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; font-size: 14px; font-weight: 500;
+  color: var(--text2); transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.nav-item:hover { background: var(--card); color: var(--text); }
+.nav-item.active {
+  background: var(--wa-glow);
+  border-color: rgba(37,211,102,0.2);
+  color: var(--wa);
+}
+.nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Main Content ── */
+main {
+  padding: 32px;
+  overflow-y: auto;
+  max-height: calc(100vh - 64px);
+}
+
+.page { display: none; }
+.page.active { display: block; animation: fadeIn 0.2s ease; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Section heading ── */
+.page-header { margin-bottom: 28px; }
+.page-header h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+.page-header p { color: var(--text2); font-size: 14px; margin-top: 4px; }
+
+/* ── Cards ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text3);
+  margin-bottom: 16px;
+}
+
+/* ── QR Box ── */
+.qr-container {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 20px; padding: 40px;
+}
+.qr-frame {
+  width: 220px; height: 220px;
+  border: 2px solid var(--wa);
+  border-radius: 16px;
+  display: grid; place-items: center;
+  background: white;
+  position: relative;
+  overflow: hidden;
+}
+.qr-frame img { width: 200px; height: 200px; }
+.qr-placeholder {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  color: var(--text3);
+}
+.qr-scanning {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px; background: var(--wa);
+  animation: scan 2s linear infinite;
+  box-shadow: 0 0 8px var(--wa);
+}
+@keyframes scan {
+  0% { top: 0; } 100% { top: 100%; }
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px; border-radius: 8px;
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: all 0.15s;
+}
+.btn-primary {
+  background: var(--wa); color: #0a0e0d;
+}
+.btn-primary:hover { background: #2de072; transform: translateY(-1px); }
+.btn-secondary {
+  background: var(--surface); color: var(--text2);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { color: var(--text); border-color: var(--border2); }
+.btn-danger {
+  background: rgba(255,71,87,0.12); color: var(--red);
+  border: 1px solid rgba(255,71,87,0.2);
+}
+.btn-danger:hover { background: rgba(255,71,87,0.2); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+
+/* ── Upload Zone ── */
+.upload-zone {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text3);
+}
+.upload-zone:hover, .upload-zone.drag { border-color: var(--wa); color: var(--wa); background: var(--wa-glow2); }
+.upload-zone input { display: none; }
+.upload-zone .upload-icon { font-size: 36px; margin-bottom: 8px; }
+.upload-zone p { font-size: 14px; }
+.upload-zone small { font-size: 12px; color: var(--text3); }
+
+/* ── Form elements ── */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.form-input, .form-textarea, .form-select {
+  width: 100%; padding: 10px 14px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--sans); font-size: 14px;
+  transition: border-color 0.15s;
+  outline: none;
+}
+.form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--wa); }
+.form-textarea { resize: vertical; min-height: 120px; font-family: var(--mono); font-size: 13px; }
+.form-select option { background: var(--card); }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { background: var(--surface); }
+th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); }
+td { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--text2); }
+tr:hover td { background: var(--surface); }
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600; font-family: var(--mono);
+}
+.badge-green { background: var(--wa-glow); color: var(--wa); }
+.badge-red { background: rgba(255,71,87,0.12); color: var(--red); }
+.badge-yellow { background: rgba(255,195,18,0.1); color: var(--yellow); }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface); border-radius: 10px; padding: 4px; border: 1px solid var(--border); }
+.tab {
+  flex: 1; padding: 8px; text-align: center; font-size: 13px; font-weight: 600;
+  cursor: pointer; border-radius: 7px; color: var(--text3); transition: all 0.15s;
+}
+.tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+/* ── Progress ── */
+.progress-bar-wrap {
+  background: var(--surface); border-radius: 99px; height: 6px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-bar { height: 100%; background: var(--wa); border-radius: 99px; transition: width 0.3s; }
+
+/* ── Stats grid ── */
+.stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px;
+}
+.stat-val { font-size: 28px; font-weight: 800; font-family: var(--mono); }
+.stat-label { font-size: 11px; color: var(--text3); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+
+/* ── Templates ── */
+.template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.template-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px; cursor: pointer; transition: all 0.15s; font-size: 13px; color: var(--text2);
+}
+.template-card:hover, .template-card.selected { border-color: var(--wa); color: var(--text); background: var(--wa-glow2); }
+.template-name { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--wa); margin-bottom: 6px; }
+
+/* ── Number input tags ── */
+.tags-wrap {
+  min-height: 80px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px; display: flex; flex-wrap: wrap; gap: 6px;
+  align-content: flex-start; cursor: text;
+}
+.tags-wrap:focus-within { border-color: var(--wa); }
+.tag {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--wa-glow); border: 1px solid rgba(37,211,102,0.2);
+  color: var(--wa); padding: 3px 8px; border-radius: 4px;
+  font-size: 12px; font-family: var(--mono);
+}
+.tag button { background: none; border: none; color: var(--wa); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+.tag-input {
+  border: none; outline: none; background: transparent;
+  color: var(--text); font-family: var(--mono); font-size: 13px;
+  min-width: 140px;
+}
+
+/* ── Log feed ── */
+.log-feed {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; max-height: 200px; overflow-y: auto;
+  font-family: var(--mono); font-size: 12px; color: var(--text3);
+}
+.log-item { padding: 3px 0; border-bottom: 1px solid var(--border); }
+.log-item:last-child { border: none; }
+.log-item .ts { color: var(--text3); margin-right: 8px; }
+.log-item.ok .num { color: var(--wa); }
+.log-item.err .num { color: var(--red); }
+
+/* ── Group selector ── */
+.group-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+.group-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px;
+  cursor: pointer; transition: all 0.15s;
+}
+.group-item:hover { border-color: var(--border2); }
+.group-item.selected { border-color: var(--wa); background: var(--wa-glow2); }
+.group-item input[type=checkbox] { accent-color: var(--wa); width: 16px; height: 16px; }
+.group-info { flex: 1; }
+.group-name { font-size: 14px; font-weight: 600; }
+.group-count { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+/* ── Misc ── */
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.text-sm { font-size: 13px; color: var(--text2); }
+.text-xs { font-size: 11px; color: var(--text3); }
+.hint { font-size: 12px; color: var(--text3); margin-top: 4px; font-family: var(--mono); }
+.flex { display: flex; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.items-center { align-items: center; }
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mb-2 { margin-bottom: 8px; }
+.empty-state {
+  text-align: center; padding: 48px 24px; color: var(--text3);
+}
+.empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">📱</div>
+    WA <span>Blaster</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="status-badge" id="statusBadge">
+    <div class="status-dot"></div>
+    <span id="statusText">Disconnected</span>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<aside>
+  <div class="nav-label">Navigation</div>
+  <div class="nav-item active" onclick="navigate('connect')" data-page="connect">
+    <span class="icon">🔗</span> Connect
+  </div>
+  <div class="nav-item" onclick="navigate('contacts')" data-page="contacts">
+    <span class="icon">👥</span> Contacts
+  </div>
+  <div class="nav-item" onclick="navigate('templates')" data-page="templates">
+    <span class="icon">📝</span> Templates
+  </div>
+  <div class="nav-item" onclick="navigate('send')" data-page="send">
+    <span class="icon">🚀</span> Send
+  </div>
+  <div class="nav-item" onclick="navigate('logs')" data-page="logs">
+    <span class="icon">📋</span> Logs
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="text-xs" style="padding: 0 12px;">
+      <div style="margin-bottom:6px; font-weight:600; color:var(--text2)">⚡ Tips</div>
+      <div>Add 3-5s delay to avoid bans</div>
+      <div class="mt-1">Use {{name}} in templates</div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main>
+
+  <!-- ── PAGE: CONNECT ── -->
+  <div class="page active" id="page-connect">
+    <div class="page-header">
+      <h1>Connect WhatsApp</h1>
+      <p>Scan the QR code with your WhatsApp mobile app</p>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+
+      <div class="card">
+        <div class="card-title">QR Code</div>
+        <div class="qr-container">
+          <div class="qr-frame" id="qrFrame">
+            <div class="qr-placeholder" id="qrPlaceholder">
+              <div>📱</div>
+              <div style="font-size:13px; color:var(--text3)">Click Connect<br>to generate QR</div>
+            </div>
+            <img id="qrImg" src="" style="display:none"/>
+            <div class="qr-scanning" id="qrScan" style="display:none"></div>
+          </div>
+
+          <div id="connectArea">
+            <button class="btn btn-primary" id="connectBtn" onclick="connectWhatsApp()">
+              🔗 Connect WhatsApp
+            </button>
+          </div>
+          <div id="disconnectArea" style="display:none; flex-direction:column; align-items:center; gap:8px;">
+            <div class="badge badge-green">✓ Connected</div>
+            <button class="btn btn-danger btn-sm" onclick="disconnectWhatsApp()">Disconnect</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title">Instructions</div>
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div class="flex gap-2 items-center">
+              <div style="width:28px;height:28px;background:var(--wa-glow);border-radius:50%;display:grid;place-items:center;font-size:13px;color:var(--wa);flex-shrink:0;font-weight:700;">1</div>
+              <span class="text-sm">Click <strong>Connect WhatsApp</strong> to generate QR</span>
+            </div>
+            <div class="flex gap-2 items-center">
+              <div style="width:28px;height:28px;background:var(--wa-glow);border-radius:50%;display:grid;place-items:center;font-size:13px;color:var(--wa);flex-shrink:0;font-weight:700;">2</div>
+              <span class="text-sm">Open WhatsApp on your phone → Settings → Linked Devices</span>
+            </div>
+            <div class="flex gap-2 items-center">
+              <div style="width:28px;height:28px;background:var(--wa-glow);border-radius:50%;display:grid;place-items:center;font-size:13px;color:var(--wa);flex-shrink:0;font-weight:700;">3</div>
+              <span class="text-sm">Tap <strong>Link a Device</strong> and scan the QR code</span>
+            </div>
+            <div class="flex gap-2 items-center">
+              <div style="width:28px;height:28px;background:var(--wa-glow);border-radius:50%;display:grid;place-items:center;font-size:13px;color:var(--wa);flex-shrink:0;font-weight:700;">4</div>
+              <span class="text-sm">Once connected, go to <strong>Contacts</strong> to add recipients</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-2">
+          <div class="card-title">Session Info</div>
+          <div style="font-family:var(--mono); font-size:12px; color:var(--text3); display:flex; flex-direction:column; gap:6px;">
+            <div>Status: <span id="infoStatus" style="color:var(--text2)">Disconnected</span></div>
+            <div>Session: <span id="infoSession" style="color:var(--text2)">None</span></div>
+            <div>Groups loaded: <span id="infoGroups" style="color:var(--text2)">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: CONTACTS ── -->
+  <div class="page" id="page-contacts">
+    <div class="page-header">
+      <h1>Add Contacts</h1>
+      <p>Choose how to add your message recipients</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab(this,'tab-excel')">📊 Excel Upload</div>
+      <div class="tab" onclick="switchTab(this,'tab-manual')">✏️ Manual Entry</div>
+      <div class="tab" onclick="switchTab(this,'tab-groups')">👥 WA Groups</div>
+    </div>
+
+    <!-- Tab: Excel -->
+    <div id="tab-excel">
+      <div class="card">
+        <div class="card-title">Upload Excel File</div>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('excelFile').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)">
+          <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="handleExcelUpload(event)"/>
+          <div class="upload-icon">📂</div>
+          <p>Drop your Excel / CSV file here</p>
+          <small>or click to browse — Columns: phone, name, message (auto-detected)</small>
+        </div>
+        <div class="hint mt-2">💡 Required column: <code>phone</code> or <code>number</code> or <code>mobile</code>. Optional: <code>name</code>, <code>message</code></div>
+      </div>
+
+      <div class="card" id="excelPreview" style="display:none">
+        <div class="flex gap-2 items-center mb-2">
+          <div class="card-title" style="margin:0;flex:1">Preview</div>
+          <button class="btn btn-primary btn-sm" onclick="addExcelToContacts()">+ Add All to Recipients</button>
+        </div>
+        <div class="table-wrap" id="excelTable"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Manual -->
+    <div id="tab-manual" style="display:none">
+      <div class="card">
+        <div class="card-title">Enter Numbers Manually</div>
+        <div class="form-group">
+          <label class="form-label">Phone Numbers</label>
+          <div class="tags-wrap" id="tagWrap" onclick="document.getElementById('tagInput').focus()">
+            <input class="tag-input" id="tagInput" placeholder="Type number + Enter (e.g. 923001234567)" onkeydown="handleTagInput(event)"/>
+          </div>
+          <div class="hint">Enter with country code. Press Enter or comma after each number.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Name (optional)</label>
+          <input class="form-input" id="manualName" placeholder="Contact name or leave blank"/>
+        </div>
+        <button class="btn btn-primary" onclick="addManualNumbers()">+ Add to Recipients</button>
+      </div>
+    </div>
+
+    <!-- Tab: Groups -->
+    <div id="tab-groups" style="display:none">
+      <div class="card">
+        <div class="card-title">WhatsApp Groups</div>
+        <div id="groupsContent">
+          <div class="empty-state">
+            <div class="empty-icon">👥</div>
+            <div>Connect WhatsApp first to load your groups</div>
+          </div>
+        </div>
+        <div id="groupsBtns" style="display:none; margin-top:16px;">
+          <button class="btn btn-primary" onclick="addGroupMembersToContacts()">+ Add Selected Members</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recipients list -->
+    <div class="card" style="margin-top:8px;">
+      <div class="flex gap-2 items-center mb-2">
+        <div class="card-title" style="margin:0;flex:1">Recipients (<span id="recipientCount">0</span>)</div>
+        <button class="btn btn-danger btn-sm" onclick="clearRecipients()">Clear All</button>
+      </div>
+      <div id="recipientsList">
+        <div class="empty-state" style="padding:24px">
+          <div>No recipients added yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: TEMPLATES ── -->
+  <div class="page" id="page-templates">
+    <div class="page-header">
+      <h1>Message Templates</h1>
+      <p>Create and manage reusable message templates</p>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div>
+        <div class="card">
+          <div class="card-title">Preset Templates</div>
+          <div class="template-grid" id="presetTemplates">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Custom Template</div>
+          <div class="form-group">
+            <label class="form-label">Template Name</label>
+            <input class="form-input" id="tplName" placeholder="e.g. Sales Offer"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Message</label>
+            <textarea class="form-textarea" id="tplBody" placeholder="Hello {{name}}, ...&#10;&#10;Use {{name}} for contact name, {{number}} for phone number"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-primary" onclick="saveTemplate()">💾 Save Template</button>
+            <button class="btn btn-secondary" onclick="useTemplate()">✓ Use This</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Saved Templates</div>
+        <div id="savedTemplatesList" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+        <hr class="divider"/>
+        <div class="card-title">Active Template Preview</div>
+        <div style="background:var(--surface);border-radius:10px;padding:16px;border:1px solid var(--border);">
+          <div id="activeTemplateName" style="font-size:11px;color:var(--wa);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">None selected</div>
+          <div id="activeTemplateBody" style="font-size:13px;color:var(--text2);white-space:pre-wrap;font-family:var(--mono);"></div>
+        </div>
+
+        <div class="hint mt-2">
+          Variables: <code>{{name}}</code> → contact name, <code>{{number}}</code> → phone number
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: SEND ── -->
+  <div class="page" id="page-send">
+    <div class="page-header">
+      <h1>Send Messages</h1>
+      <p>Review and launch your campaign</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val" id="statRecipients">0</div>
+        <div class="stat-label">Recipients</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statSent" style="color:var(--wa)">0</div>
+        <div class="stat-label">Sent</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statFailed" style="color:var(--red)">0</div>
+        <div class="stat-label">Failed</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Campaign Settings</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Delay Between Messages (seconds)</label>
+          <input class="form-input" type="number" id="delayInput" value="4" min="1" max="30"/>
+          <div class="hint">Min 3s recommended to avoid bans</div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Active Template</label>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text2);" id="sendTemplateName">None selected</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Progress</div>
+      <div class="progress-bar-wrap mb-2">
+        <div class="progress-bar" id="progressBar" style="width:0%"></div>
+      </div>
+      <div class="text-xs" id="progressText">Waiting to start...</div>
+
+      <div class="mt-3 flex gap-2">
+        <button class="btn btn-primary" id="sendBtn" onclick="startSending()">
+          🚀 Start Campaign
+        </button>
+        <button class="btn btn-danger" id="stopBtn" onclick="stopSending()" style="display:none">
+          ⏹ Stop
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Live Log</div>
+      <div class="log-feed" id="logFeed">
+        <div class="log-item">Waiting for campaign to start...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: LOGS ── -->
+  <div class="page" id="page-logs">
+    <div class="page-header">
+      <h1>Activity Logs</h1>
+      <p>Full history of all messaging activity</p>
+    </div>
+    <div class="card">
+      <div class="flex gap-2 mb-2 items-center">
+        <div class="card-title" style="margin:0;flex:1">All Logs</div>
+        <button class="btn btn-secondary btn-sm" onclick="clearLogs()">Clear</button>
+      </div>
+      <div class="log-feed" id="fullLogFeed" style="max-height:400px;"></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG — change if backend is on diff port
+// ═══════════════════════════════════════════
+const API = 'http://localhost:3001';
+const socket = io(API);
+
+// ═══ STATE ═══
+let waStatus = 'disconnected';
+let recipients = [];
+let templates = JSON.parse(localStorage.getItem('wa_templates') || '[]');
+let activeTemplate = null;
+let isSending = false;
+let stopFlag = false;
+let groups = [];
+let allLogs = [];
+
+// ═══ PRESETS ═══
+const PRESETS = [
+  { name: 'Greeting', body: 'Hello {{name}}! 👋\n\nHope you\'re doing great today.' },
+  { name: 'Reminder', body: 'Hi {{name}}, this is a friendly reminder for your appointment.' },
+  { name: 'Sales Offer', body: '🎉 Exclusive offer for {{name}}!\n\nWe have a special deal just for you. Reply to know more.' },
+  { name: 'Follow Up', body: 'Hi {{name}}, just following up on our last conversation. Let us know if you have any questions!' },
+];
+
+// ═══ SOCKET EVENTS ═══
+socket.on('status', (data) => {
+  waStatus = data.status;
+  updateStatusUI(data);
+});
+
+socket.on('groups', (grps) => {
+  groups = grps;
+  document.getElementById('infoGroups').textContent = grps.length;
+  renderGroups();
+});
+
+socket.on('send_progress', (data) => {
+  const pct = Math.round(((data.sent + data.failed) / data.total) * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `Sent: ${data.sent} | Failed: ${data.failed} | Total: ${data.total}`;
+  document.getElementById('statSent').textContent = data.sent;
+  document.getElementById('statFailed').textContent = data.failed;
+
+  const ok = data.current.status === 'sent';
+  addLog(`${data.current.number}`, ok ? 'sent ✓' : `failed: ${data.current.error || ''}`, ok);
+});
+
+socket.on('send_complete', (data) => {
+  isSending = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('sendBtn').style.display = '';
+  addLog('CAMPAIGN', `Complete — Sent: ${data.sent}, Failed: ${data.failed}`, true);
+});
+
+// ═══ STATUS UI ═══
+function updateStatusUI(data) {
+  const badge = document.getElementById('statusBadge');
+  const text = document.getElementById('statusText');
+  const qrImg = document.getElementById('qrImg');
+  const qrPlaceholder = document.getElementById('qrPlaceholder');
+  const qrScan = document.getElementById('qrScan');
+  const connectArea = document.getElementById('connectArea');
+  const disconnectArea = document.getElementById('disconnectArea');
+  const infoStatus = document.getElementById('infoStatus');
+  const infoSession = document.getElementById('infoSession');
+
+  badge.className = 'status-badge ' + data.status;
+
+  if (data.status === 'ready') {
+    text.textContent = 'Connected';
+    qrImg.style.display = 'none';
+    qrPlaceholder.innerHTML = '<div style="font-size:48px;">✅</div><div style="color:var(--wa);font-weight:700;font-size:14px;">Connected!</div>';
+    qrPlaceholder.style.display = 'flex';
+    qrScan.style.display = 'none';
+    connectArea.style.display = 'none';
+    disconnectArea.style.display = 'flex';
+    infoStatus.textContent = '✓ Ready';
+    infoSession.textContent = 'Active';
+    fetchGroups();
+  } else if (data.status === 'qr') {
+    text.textContent = 'Scan QR';
+    qrImg.src = data.qr;
+    qrImg.style.display = 'block';
+    qrPlaceholder.style.display = 'none';
+    qrScan.style.display = 'block';
+    infoStatus.textContent = 'Awaiting QR scan';
+  } else if (data.status === 'connecting') {
+    text.textContent = 'Connecting...';
+    qrImg.style.display = 'none';
+    qrPlaceholder.innerHTML = '<div class="spinner" style="font-size:32px;animation:spin 1s linear infinite">⏳</div>';
+    qrPlaceholder.style.display = 'flex';
+    qrScan.style.display = 'none';
+    infoStatus.textContent = 'Authenticating...';
+  } else {
+    text.textContent = 'Disconnected';
+    qrImg.style.display = 'none';
+    qrPlaceholder.innerHTML = '<div>📱</div><div style="font-size:13px;color:var(--text3)">Click Connect<br>to generate QR</div>';
+    qrPlaceholder.style.display = 'flex';
+    qrScan.style.display = 'none';
+    connectArea.style.display = 'block';
+    disconnectArea.style.display = 'none';
+    infoStatus.textContent = 'Disconnected';
+    infoSession.textContent = 'None';
+  }
+}
+
+// ═══ NAV ═══
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+
+  if (page === 'send') updateSendPage();
+  if (page === 'templates') renderTemplates();
+}
+
+function switchTab(el, tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['tab-excel','tab-manual','tab-groups'].forEach(id => {
+    document.getElementById(id).style.display = id === tabId ? 'block' : 'none';
+  });
+}
+
+// ═══ CONNECT ═══
+async function connectWhatsApp() {
+  document.getElementById('connectBtn').disabled = true;
+  document.getElementById('connectBtn').textContent = 'Initializing...';
+  const qrPlaceholder = document.getElementById('qrPlaceholder');
+  qrPlaceholder.innerHTML = '<div style="font-size:32px;">⏳</div><div style="font-size:13px;color:var(--text3)">Starting...</div>';
+
+  await fetch(API + '/api/connect', { method: 'POST' });
+  // Status comes via socket
+}
+
+async function disconnectWhatsApp() {
+  await fetch(API + '/api/disconnect', { method: 'POST' });
+  document.getElementById('connectBtn').disabled = false;
+  document.getElementById('connectBtn').textContent = '🔗 Connect WhatsApp';
+}
+
+async function fetchGroups() {
+  const res = await fetch(API + '/api/groups');
+  const data = await res.json();
+  groups = data.groups || [];
+  document.getElementById('infoGroups').textContent = groups.length;
+  renderGroups();
+}
+
+// ═══ EXCEL ═══
+let parsedExcelContacts = [];
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) processExcelFile(file);
+}
+
+function handleExcelUpload(e) {
+  const file = e.target.files[0];
+  if (file) processExcelFile(file);
+}
+
+function processExcelFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    const keys = Object.keys(rows[0] || {});
+    const numberKey = keys.find(k => /phone|number|mobile|cell|whatsapp|no\.|tel/i.test(k)) || keys[0];
+    const msgKey = keys.find(k => /message|msg|text|content/i.test(k));
+    const nameKey = keys.find(k => /name|contact|person/i.test(k));
+
+    parsedExcelContacts = rows.map((row, i) => ({
+      id: Date.now() + i,
+      number: String(row[numberKey] || '').replace(/\D/g, ''),
+      name: nameKey ? String(row[nameKey] || '') : '',
+      customMessage: msgKey ? String(row[msgKey] || '') : ''
+    })).filter(c => c.number.length >= 7);
+
+    // Render preview table
+    const preview = document.getElementById('excelPreview');
+    const tableDiv = document.getElementById('excelTable');
+    preview.style.display = 'block';
+
+    let html = '<table><thead><tr><th>#</th><th>Number</th><th>Name</th><th>Custom Message</th></tr></thead><tbody>';
+    parsedExcelContacts.slice(0, 20).forEach((c, i) => {
+      html += `<tr><td>${i+1}</td><td><span class="badge badge-green">${c.number}</span></td><td>${c.name || '—'}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.customMessage || '—'}</td></tr>`;
+    });
+    if (parsedExcelContacts.length > 20) {
+      html += `<tr><td colspan="4" style="text-align:center;color:var(--text3)">... and ${parsedExcelContacts.length - 20} more</td></tr>`;
+    }
+    html += '</tbody></table>';
+    tableDiv.innerHTML = html;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function addExcelToContacts() {
+  const added = parsedExcelContacts.filter(c => !recipients.find(r => r.number === c.number));
+  recipients = [...recipients, ...added];
+  renderRecipients();
+  addLog('Excel', `Added ${added.length} contacts`, true);
+}
+
+// ═══ MANUAL ═══
+let manualNumbers = [];
+
+function handleTagInput(e) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.replace(/\D/g, '').trim();
+    if (val.length >= 7) {
+      manualNumbers.push(val);
+      addTag(val);
+      e.target.value = '';
+    }
+  } else if (e.key === 'Backspace' && !e.target.value) {
+    // Remove last tag
+    if (manualNumbers.length) {
+      manualNumbers.pop();
+      const tags = document.querySelectorAll('.tag');
+      if (tags.length) tags[tags.length-1].remove();
+    }
+  }
+}
+
+function addTag(number) {
+  const wrap = document.getElementById('tagWrap');
+  const input = document.getElementById('tagInput');
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  tag.innerHTML = `${number} <button onclick="removeTag(this,'${number}')">×</button>`;
+  wrap.insertBefore(tag, input);
+}
+
+function removeTag(btn, number) {
+  manualNumbers = manualNumbers.filter(n => n !== number);
+  btn.parentElement.remove();
+}
+
+function addManualNumbers() {
+  const name = document.getElementById('manualName').value.trim();
+  const added = manualNumbers.filter(n => !recipients.find(r => r.number === n))
+    .map(n => ({ id: Date.now() + Math.random(), number: n, name, customMessage: '' }));
+  recipients = [...recipients, ...added];
+  renderRecipients();
+  // Reset
+  manualNumbers = [];
+  document.getElementById('tagWrap').querySelectorAll('.tag').forEach(t => t.remove());
+  document.getElementById('manualName').value = '';
+  addLog('Manual', `Added ${added.length} numbers`, true);
+}
+
+// ═══ GROUPS ═══
+let selectedGroups = new Set();
+
+function renderGroups() {
+  const container = document.getElementById('groupsContent');
+  const btns = document.getElementById('groupsBtns');
+  if (!groups.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><div>No groups found or WhatsApp not connected</div></div>';
+    btns.style.display = 'none';
+    return;
+  }
+  btns.style.display = 'block';
+  let html = '<div class="group-list">';
+  groups.forEach(g => {
+    html += `<div class="group-item ${selectedGroups.has(g.id) ? 'selected' : ''}" onclick="toggleGroup('${g.id}',this)">
+      <input type="checkbox" ${selectedGroups.has(g.id) ? 'checked' : ''} onclick="event.stopPropagation()"/>
+      <div class="group-info">
+        <div class="group-name">${g.name}</div>
+        <div class="group-count">${g.participants} members</div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function toggleGroup(id, el) {
+  if (selectedGroups.has(id)) { selectedGroups.delete(id); el.classList.remove('selected'); }
+  else { selectedGroups.add(id); el.classList.add('selected'); }
+  el.querySelector('input').checked = selectedGroups.has(id);
+}
+
+async function addGroupMembersToContacts() {
+  if (!selectedGroups.size) return alert('Select at least one group');
+  let added = 0;
+  for (const gid of selectedGroups) {
+    try {
+      const res = await fetch(API + `/api/groups/${encodeURIComponent(gid)}/members`);
+      const data = await res.json();
+      (data.members || []).forEach(m => {
+        if (!recipients.find(r => r.number === m.number)) {
+          recipients.push({ id: Date.now() + Math.random(), number: m.number, name: '', customMessage: '' });
+          added++;
+        }
+      });
+    } catch(e) {}
+  }
+  renderRecipients();
+  addLog('Groups', `Added ${added} members`, true);
+}
+
+// ═══ RECIPIENTS ═══
+function renderRecipients() {
+  document.getElementById('recipientCount').textContent = recipients.length;
+  document.getElementById('statRecipients').textContent = recipients.length;
+  const container = document.getElementById('recipientsList');
+  if (!recipients.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:24px"><div>No recipients added yet</div></div>';
+    return;
+  }
+  let html = '<div class="table-wrap"><table><thead><tr><th>#</th><th>Number</th><th>Name</th><th>Custom Msg</th><th></th></tr></thead><tbody>';
+  recipients.slice(0, 50).forEach((r, i) => {
+    html += `<tr><td>${i+1}</td><td><span class="badge badge-green">${r.number}</span></td><td>${r.name || '—'}</td><td>${r.customMessage ? '✓' : '—'}</td><td><button class="btn btn-danger btn-sm" onclick="removeRecipient(${r.id})">×</button></td></tr>`;
+  });
+  if (recipients.length > 50) html += `<tr><td colspan="5" style="text-align:center;color:var(--text3)">... and ${recipients.length - 50} more</td></tr>`;
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function removeRecipient(id) {
+  recipients = recipients.filter(r => r.id != id);
+  renderRecipients();
+}
+
+function clearRecipients() {
+  if (confirm('Clear all recipients?')) { recipients = []; renderRecipients(); }
+}
+
+// ═══ TEMPLATES ═══
+function renderTemplates() {
+  // Presets
+  const presetGrid = document.getElementById('presetTemplates');
+  presetGrid.innerHTML = PRESETS.map(p => `
+    <div class="template-card ${activeTemplate?.name === p.name ? 'selected' : ''}" onclick="selectPreset('${p.name}')">
+      <div class="template-name">${p.name}</div>
+      <div>${p.body.substring(0, 60)}${p.body.length > 60 ? '...' : ''}</div>
+    </div>
+  `).join('');
+
+  // Saved
+  const savedList = document.getElementById('savedTemplatesList');
+  if (!templates.length) {
+    savedList.innerHTML = '<div class="text-sm" style="color:var(--text3)">No saved templates yet</div>';
+  } else {
+    savedList.innerHTML = templates.map((t, i) => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div class="flex gap-2 items-center mb-1">
+          <span style="font-size:12px;color:var(--wa);font-weight:700;flex:1">${t.name}</span>
+          <button class="btn btn-secondary btn-sm" onclick="selectSaved(${i})">Use</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${i})">×</button>
+        </div>
+        <div style="font-size:12px;color:var(--text3);font-family:var(--mono)">${t.body.substring(0,80)}${t.body.length>80?'...':''}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function selectPreset(name) {
+  const p = PRESETS.find(p => p.name === name);
+  if (!p) return;
+  activeTemplate = p;
+  document.getElementById('activeTemplateName').textContent = p.name;
+  document.getElementById('activeTemplateBody').textContent = p.body;
+  document.getElementById('tplName').value = p.name;
+  document.getElementById('tplBody').value = p.body;
+  renderTemplates();
+}
+
+function selectSaved(i) {
+  activeTemplate = templates[i];
+  document.getElementById('activeTemplateName').textContent = templates[i].name;
+  document.getElementById('activeTemplateBody').textContent = templates[i].body;
+  document.getElementById('tplName').value = templates[i].name;
+  document.getElementById('tplBody').value = templates[i].body;
+  renderTemplates();
+}
+
+function deleteTemplate(i) {
+  templates.splice(i, 1);
+  localStorage.setItem('wa_templates', JSON.stringify(templates));
+  renderTemplates();
+}
+
+function saveTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  const body = document.getElementById('tplBody').value.trim();
+  if (!name || !body) return alert('Enter name and message');
+  const idx = templates.findIndex(t => t.name === name);
+  if (idx >= 0) templates[idx] = { name, body };
+  else templates.push({ name, body });
+  localStorage.setItem('wa_templates', JSON.stringify(templates));
+  renderTemplates();
+  addLog('Template', `Saved: ${name}`, true);
+}
+
+function useTemplate() {
+  const body = document.getElementById('tplBody').value.trim();
+  const name = document.getElementById('tplName').value.trim() || 'Custom';
+  if (!body) return alert('Enter a message first');
+  activeTemplate = { name, body };
+  document.getElementById('activeTemplateName').textContent = name;
+  document.getElementById('activeTemplateBody').textContent = body;
+  renderTemplates();
+}
+
+// ═══ SEND PAGE ═══
+function updateSendPage() {
+  document.getElementById('statRecipients').textContent = recipients.length;
+  document.getElementById('sendTemplateName').textContent = activeTemplate ? activeTemplate.name : 'None selected';
+}
+
+async function startSending() {
+  if (waStatus !== 'ready') return alert('Please connect WhatsApp first!');
+  if (!recipients.length) return alert('No recipients added!');
+  if (!activeTemplate) return alert('No template selected! Go to Templates page.');
+
+  if (!confirm(`Send to ${recipients.length} recipients?`)) return;
+
+  isSending = true;
+  stopFlag = false;
+  document.getElementById('sendBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = '';
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('progressText').textContent = 'Sending...';
+  document.getElementById('statSent').textContent = '0';
+  document.getElementById('statFailed').textContent = '0';
+  clearLogFeed();
+
+  const delay = (parseInt(document.getElementById('delayInput').value) || 4) * 1000;
+
+  const res = await fetch(API + '/api/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipients: recipients.map(r => ({ number: r.number, name: r.name, customMessage: r.customMessage || '' })),
+      template: activeTemplate.body,
+      delay
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    alert('Error: ' + err.error);
+    isSending = false;
+    document.getElementById('sendBtn').style.display = '';
+    document.getElementById('stopBtn').style.display = 'none';
+  }
+}
+
+function stopSending() {
+  // Note: to truly stop, the server would need a stop mechanism.
+  // This just updates the UI; implement a /api/stop endpoint for full support.
+  isSending = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('sendBtn').style.display = '';
+  addLog('SYSTEM', 'Stop requested — in-progress messages may still send', false);
+}
+
+// ═══ LOGS ═══
+function addLog(num, msg, ok) {
+  const ts = new Date().toLocaleTimeString();
+  const entry = { ts, num, msg, ok };
+  allLogs.unshift(entry);
+
+  const logHtml = `<div class="log-item ${ok ? 'ok' : 'err'}"><span class="ts">${ts}</span><span class="num">${num}</span> — ${msg}</div>`;
+  document.getElementById('logFeed').insertAdjacentHTML('afterbegin', logHtml);
+  document.getElementById('fullLogFeed').insertAdjacentHTML('afterbegin', logHtml);
+}
+
+function clearLogFeed() {
+  document.getElementById('logFeed').innerHTML = '';
+}
+
+function clearLogs() {
+  allLogs = [];
+  document.getElementById('fullLogFeed').innerHTML = '';
+}
+
+// ═══ INIT ═══
+renderTemplates();
+renderRecipients();
+
+// Check initial status
+fetch(API + '/api/status').then(r => r.json()).then(d => {
+  updateStatusUI(d);
+  if (d.status === 'ready') fetchGroups();
+}).catch(() => {
+  addLog('SYSTEM', 'Cannot connect to backend at ' + API, false);
+});
+</script>
+</body>
+</html>
