@@ -244,10 +244,10 @@ app.post('/api/send', async (req, res) => {
 });
 
 // ─── Serve frontend ────────────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, '../frontend/public')));
+app.use(express.static(path.join(__dirname, '../')));
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
-    return res.sendFile(path.join(__dirname, '../frontend/public/index.html'));
+    return res.sendFile(path.join(__dirname, '../index.html'));
   }
   next();
 });
