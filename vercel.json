@@ -1,0 +1,27 @@
+{
+    "version": 2,
+    "builds": [
+        {
+        "src": "wa-blast-backend/server.js",
+        "use": "@vercel/node"
+        }
+    ],
+    "routes": [
+        {
+        "src": "/(.*)",
+        "dest": "/wa-blast-backend/server.js"
+        }
+    ]
+
+
+
+
+
+
+
+
+
+
+
+
+}
